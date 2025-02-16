@@ -4,6 +4,8 @@ import * as sqs from 'aws-cdk-lib/aws-sqs';
 import * as lambda from 'aws-cdk-lib/aws-lambda';
 import * as path from 'path';
 import { NodejsFunction } from 'aws-cdk-lib/aws-lambda-nodejs';
+import * as cloudwatch from 'aws-cdk-lib/aws-cloudwatch';
+import 'dotenv/config'
 
 export class LambdaSqsDlqStack extends cdk.Stack {
   constructor(scope: Construct, id: string, props?: cdk.StackProps) {
@@ -13,6 +15,21 @@ export class LambdaSqsDlqStack extends cdk.Stack {
       logGroupName: 'sandbox-lambda-log-group',
       retention: cdk.aws_logs.RetentionDays.ONE_DAY,
       removalPolicy: cdk.RemovalPolicy.DESTROY,
+    });
+
+    const filter = logGroup.addMetricFilter('metric-filter', {
+      filterPattern: {
+        logPatternString: "%ERROR%"
+      },
+      metricNamespace: 'ErrorMetrics',
+      metricName: 'ErrorCount'
+    });
+
+    const alarm = new cdk.aws_cloudwatch.Alarm(this, 'error-alarm', {
+      metric: filter.metric(),
+      threshold: 1,
+      evaluationPeriods: 1,
+      datapointsToAlarm: 1
     });
 
     const deadLetterQueue = new sqs.Queue(this, 'dead-letter-queue', {
@@ -39,5 +56,16 @@ export class LambdaSqsDlqStack extends cdk.Stack {
     });
 
     subscriber.addEventSource(new cdk.aws_lambda_event_sources.SqsEventSource(queue));
+
+    const alarmLambda = new NodejsFunction(this, 'alarm-lambda', {
+      entry: path.join(__dirname, '../', 'notify-slack-lambda', 'index.ts'),
+      handler: 'handler',
+      runtime: lambda.Runtime.NODEJS_22_X,
+      environment: {
+        SLACK_WEBHOOK_URL: process.env.SLACK_WEBHOOK_URL ?? '',
+      },
+    });
+
+    alarm.addAlarmAction(new cdk.aws_cloudwatch_actions.LambdaAction(alarmLambda));
   }
 }
