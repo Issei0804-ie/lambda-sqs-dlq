@@ -12,3 +12,14 @@ The `cdk.json` file tells the CDK Toolkit how to execute your app.
 * `npx cdk deploy`  deploy this stack to your default AWS account/region
 * `npx cdk diff`    compare deployed stack with current state
 * `npx cdk synth`   emits the synthesized CloudFormation template
+
+
+## Send message to sqs
+
+```sh
+aws sqs send-message \
+--queue-url xxx \
+--message-body "{\"status\":\"fail\",\"message\":\"hello\"}" \
+--message-group-id "MyGroupId" \
+--message-deduplication-id "UniqueDeduplicationId7"
+```
